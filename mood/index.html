@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f2a">
+<title>Mood Logger</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #1b1f2a;
+    --card: #252a38;
+    --text: #eef0f5;
+    --muted: #9aa1b2;
+    --btn: #323849;
+    --accent: #3e9bf5;
+    --ok: #4cc38a;
+    --err: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Bottom padding keeps Submit clear of the Android gesture bar. */
+    padding: calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom));
+    user-select: none;
+  }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  h1 { font-size: 20px; margin: 0; }
+  .version { color: var(--muted); font-size: 12px; }
+  .row { background: var(--card); border-radius: 14px; padding: 12px; margin: 10px 0; }
+  .label { font-weight: 600; margin-bottom: 8px; }
+  .choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .choices button {
+    height: 56px;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: var(--btn);
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .choices button[aria-pressed="true"] { background: var(--accent); border-color: #fff; }
+  #submit {
+    width: 100%;
+    height: 64px;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--ok);
+    color: #0d1a12;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  #submit:disabled { background: var(--btn); color: var(--muted); }
+  #status { min-height: 1.4em; text-align: center; margin-top: 10px; color: var(--muted); }
+  #status.err { color: var(--err); }
+  #done {
+    display: none;
+    position: fixed; inset: 0;
+    background: var(--bg);
+    align-items: center; justify-content: center; flex-direction: column;
+    font-size: 28px; font-weight: 700;
+  }
+  #done small { font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 8px; }
+  body.logged #done { display: flex; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mood Logger</h1>
+  <span class="version" id="version"></span>
+</header>
+
+<main id="rows"></main>
+<button id="submit" disabled>Submit</button>
+<div id="status" role="status"></div>
+
+<div id="done">Logged<small>Swipe away to close</small></div>
+
+<script>
+// Bump VERSION (and CACHE in sw.js) with every change.
+const VERSION = 'v1.0.0';
+
+// Paste the Apps Script web app URL here after deploying apps_script/Code.gs.
+const ENDPOINT = 'PASTE_APPS_SCRIPT_URL_HERE';
+
+const FIELDS = ['Horny', 'Happy', 'Anxiety', 'Depression', 'Self-esteem'];
+const QUEUE_KEY = 'moodLogger.queue';
+
+const scores = {};
+const rowsEl = document.getElementById('rows');
+const submitEl = document.getElementById('submit');
+const statusEl = document.getElementById('status');
+document.getElementById('version').textContent = VERSION;
+
+for (const field of FIELDS) {
+  const row = document.createElement('section');
+  row.className = 'row';
+  row.innerHTML = `<div class="label">${field}</div><div class="choices"></div>`;
+  const choices = row.querySelector('.choices');
+  for (let n = 1; n <= 4; n++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = n;
+    b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-label', `${field} ${n}`);
+    b.addEventListener('click', () => {
+      scores[field] = n;
+      for (const other of choices.children) other.setAttribute('aria-pressed', String(other === b));
+      submitEl.disabled = FIELDS.some(f => !scores[f]);
+    });
+    choices.appendChild(b);
+  }
+  rowsEl.appendChild(row);
+}
+
+function readQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch { return []; }
+}
+function writeQueue(q) {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch {}
+}
+
+async function send(entry) {
+  // text/plain keeps this a "simple" request, so Apps Script needs no CORS preflight.
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(entry),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Save failed');
+}
+
+// Entries that failed to send (e.g. offline) are kept and retried on next open/submit.
+async function flushQueue() {
+  const q = readQueue();
+  while (q.length) {
+    await send(q[0]);
+    q.shift();
+    writeQueue(q);
+  }
+}
+
+function setStatus(text, isErr) {
+  statusEl.textContent = text;
+  statusEl.className = isErr ? 'err' : '';
+}
+
+submitEl.addEventListener('click', async () => {
+  if (ENDPOINT.startsWith('PASTE_')) { setStatus('Set ENDPOINT in index.html first', true); return; }
+  submitEl.disabled = true;
+  setStatus('Saving…');
+  const entry = { ts: Date.now(), version: VERSION };
+  FIELDS.forEach(f => { entry[f] = scores[f]; });
+  writeQueue([...readQueue(), entry]);
+  let saved = true;
+  try {
+    await flushQueue();
+    setStatus('Saved');
+  } catch (e) {
+    // The entry stays queued, so don't let a resubmit duplicate it.
+    saved = false;
+    setStatus('Offline: kept on phone, sends next open (' + e.message + ')', true);
+  }
+  setTimeout(() => {
+    document.body.classList.add('logged');
+    // Android often ignores this for installed web apps; the "Logged" screen is the fallback.
+    window.close();
+  }, saved ? 600 : 2500);
+});
+
+if (!ENDPOINT.startsWith('PASTE_') && readQueue().length) {
+  flushQueue().then(
+    () => setStatus('Sent earlier unsaved entries'),
+    e => setStatus(readQueue().length + ' entries still unsent: ' + e.message, true));
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

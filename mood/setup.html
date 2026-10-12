@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f2a">
+<title>Mood Logger Setup</title>
+<style>
+  :root { --bg: #1b1f2a; --card: #252a38; --text: #eef0f5; --muted: #9aa1b2; --ok: #4cc38a; --accent: #3e9bf5; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  ol { padding: 0; margin: 0; list-style: none; counter-reset: step; }
+  li { background: var(--card); border-radius: 14px; padding: 14px; margin: 10px 0; counter-increment: step; }
+  li::before { content: counter(step) ". "; font-weight: 700; color: var(--accent); }
+  .btn {
+    display: block; width: 100%; margin-top: 10px; padding: 16px; border: 0; border-radius: 12px;
+    background: var(--ok); color: #0d1a12; font-size: 18px; font-weight: 700; text-align: center; text-decoration: none;
+  }
+  .muted { color: var(--muted); font-size: 15px; }
+  b { color: #fff; }
+</style>
+</head>
+<body>
+<h1>Mood Logger setup</h1>
+<ol>
+  <li>Copy the backend code.
+    <button class="btn" id="copy">Copy backend code</button>
+    <div class="muted" id="copyStatus"></div>
+  </li>
+  <li>Open Apps Script. On a phone, tap <b>⋮ → Desktop site</b> in Chrome if the editor looks broken.
+    <a class="btn" href="https://script.google.com/create" target="_blank" rel="noopener">Open new Apps Script project</a>
+  </li>
+  <li>Select everything in the editor, paste over it, and tap the save icon.</li>
+  <li>Tap <b>Deploy → New deployment</b>. Pick the type <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then tap <b>Deploy</b>.
+    <div class="muted">Google will ask you to authorize. If it shows "Google hasn't verified this app", choose Advanced → Go to project. It's your own script.</div>
+  </li>
+  <li>Open the <b>Web app URL</b> it shows you, then tap <b>Connect Mood Logger</b>. The app opens already connected.</li>
+  <li>In the app, tap <b>⋮ → Add to Home screen</b>. That's it.</li>
+</ol>
+<script>
+document.getElementById('copy').addEventListener('click', async () => {
+  const out = document.getElementById('copyStatus');
+  try {
+    const res = await fetch('../apps_script/Code.gs', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await navigator.clipboard.writeText(await res.text());
+    out.textContent = 'Copied.';
+  } catch (e) {
+    out.textContent = 'Copy failed (' + e.message + '). Open apps_script/Code.gs on GitHub instead.';
+  }
+});
+</script>
+</body>
+</html>

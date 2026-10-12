@@ -1,5 +1,5 @@
 // Bump CACHE together with VERSION in index.html so phones pick up changes.
-const CACHE = 'mood-logger-v1.0.0';
+const CACHE = 'mood-logger-v1.1.0';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

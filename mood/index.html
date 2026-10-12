@@ -84,10 +84,23 @@
 
 <script>
 // Bump VERSION (and CACHE in sw.js) with every change.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 
-// Paste the Apps Script web app URL here after deploying apps_script/Code.gs.
-const ENDPOINT = 'PASTE_APPS_SCRIPT_URL_HERE';
+// The Apps Script web app URL is set on the phone, not in code: the backend's
+// "Connect" link opens this page with ?endpoint=..., or tap the version label to paste it.
+const ENDPOINT_KEY = 'moodLogger.endpoint';
+let ENDPOINT = '';
+try { ENDPOINT = localStorage.getItem(ENDPOINT_KEY) || ''; } catch {}
+const param = new URLSearchParams(location.search).get('endpoint');
+if (param && isScriptUrl(param)) {
+  ENDPOINT = param;
+  try { localStorage.setItem(ENDPOINT_KEY, param); } catch {}
+  history.replaceState(null, '', location.pathname);
+}
+
+function isScriptUrl(u) {
+  return /^https:\/\/script\.google\.com\/.+\/exec$/.test(u);
+}
 
 const FIELDS = ['Horny', 'Happy', 'Anxiety', 'Depression', 'Self-esteem'];
 const QUEUE_KEY = 'moodLogger.queue';
@@ -96,7 +109,16 @@ const scores = {};
 const rowsEl = document.getElementById('rows');
 const submitEl = document.getElementById('submit');
 const statusEl = document.getElementById('status');
-document.getElementById('version').textContent = VERSION;
+const versionEl = document.getElementById('version');
+versionEl.textContent = VERSION;
+versionEl.addEventListener('click', () => {
+  const u = (prompt('Apps Script web app URL (ends in /exec):', ENDPOINT) || '').trim();
+  if (!u) return;
+  if (!isScriptUrl(u)) { setStatus('That is not an Apps Script /exec URL', true); return; }
+  ENDPOINT = u;
+  try { localStorage.setItem(ENDPOINT_KEY, u); } catch {}
+  setStatus('Backend connected');
+});
 
 for (const field of FIELDS) {
   const row = document.createElement('section');
@@ -153,7 +175,7 @@ function setStatus(text, isErr) {
 }
 
 submitEl.addEventListener('click', async () => {
-  if (ENDPOINT.startsWith('PASTE_')) { setStatus('Set ENDPOINT in index.html first', true); return; }
+  if (!ENDPOINT) { setStatus('Not connected: open the backend\'s Connect link, or tap the version', true); return; }
   submitEl.disabled = true;
   setStatus('Saving…');
   const entry = { ts: Date.now(), version: VERSION };
@@ -175,11 +197,14 @@ submitEl.addEventListener('click', async () => {
   }, saved ? 600 : 2500);
 });
 
-if (!ENDPOINT.startsWith('PASTE_') && readQueue().length) {
+if (ENDPOINT && readQueue().length) {
   flushQueue().then(
     () => setStatus('Sent earlier unsaved entries'),
     e => setStatus(readQueue().length + ' entries still unsent: ' + e.message, true));
 }
+
+if (!ENDPOINT) statusEl.innerHTML = '<span class="err">Not connected yet.</span> <a href="setup.html" style="color:var(--accent)">Set up backend</a>';
+else if (param) setStatus('Backend connected');
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>

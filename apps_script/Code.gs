@@ -3,6 +3,7 @@
 
 const FOLDER_NAME = 'App_data';
 const SHEET_NAME = 'Mood_log';
+const APP_URL = 'https://parsko41.github.io/Health_logger/mood/';
 const FIELDS = ['Horny', 'Happy', 'Anxiety', 'Depression', 'Self-esteem'];
 const HEADERS = ['Timestamp'].concat(FIELDS, ['App version']);
 
@@ -26,9 +27,17 @@ function doPost(e) {
   }
 }
 
-// Quick check that the deployment is live: open the web app URL in a browser.
+// Open the web app URL on your phone: it shows a button that connects the app to this backend.
 function doGet() {
-  return json_({ ok: true, app: 'Mood Logger' });
+  const url = APP_URL + '?endpoint=' + encodeURIComponent(ScriptApp.getService().getUrl());
+  return HtmlService.createHtmlOutput(
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<div style="font:20px system-ui;padding:24px;text-align:center">' +
+    '<p>Mood Logger backend is live.</p>' +
+    '<p><a target="_top" href="' + url + '" style="display:inline-block;padding:18px 28px;' +
+    'background:#4cc38a;color:#0d1a12;border-radius:14px;text-decoration:none;font-weight:700">' +
+    'Connect Mood Logger</a></p></div>'
+  ).setTitle('Mood Logger backend');
 }
 
 function getSheet_() {
